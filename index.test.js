@@ -1,5 +1,5 @@
 const { sequelize } = require("./db");
-const { Band, Musician, Song } = require("./index");
+const { Band, Musician, Song, Manager } = require("./index");
 
 describe("Band, Musician, and Song Models", () => {
   /**
@@ -95,5 +95,87 @@ describe("Band, Musician, and Song Models", () => {
     const song = await Song.findByPk(1);
     const deleted = await song.destroy();
     expect(song).toEqual(deleted);
+  });
+});
+
+describe("associations", () => {
+  beforeAll(async () => {
+    await sequelize.sync({ force: true });
+  });
+
+  test("band and musician association", async () => {
+    const band1 = await Band.create({
+      name: "KPOP",
+      genre: "pop",
+    });
+    const band2 = await Band.create({
+      name: "Beetles",
+      genre: "classic",
+    });
+    const musicians = await Musician.bulkCreate([
+      { name: "ab", instrument: "guitar" },
+      { name: "cd", instrument: "piano" },
+      { name: "ef", instrument: "flute" },
+    ]);
+
+    await band1.setMusicians([musicians[0], musicians[1]]);
+    await band2.setMusicians([musicians[2]]);
+
+    const band1_musicians = await band1.getMusicians();
+    const band2_musicians = await band2.getMusicians();
+    expect(band1_musicians.length).toBe(2);
+    expect(band2_musicians.length).toBe(1);
+  });
+
+  test("band and musician association", async () => {
+    const band1 = await Band.findByPk(1);
+    const band2 = await Band.findByPk(2);
+    const band3 = await Band.create({
+      name: "Raiders",
+      genre: "classic",
+    });
+    const songs = await Song.bulkCreate([
+      { title: "sky", year: 2008, length: 5 },
+      { title: "ground", year: 2010, length: 5 },
+      { title: "wind", year: 2011, length: 4 },
+      { title: "fire", year: 2020, length: 3 },
+    ]);
+
+    await band1.setSongs([songs[0], songs[1], songs[2]]);
+    await songs[3].setBands([band2, band3]);
+
+    const band1_songs = await band1.getSongs();
+    const song2_bands = await songs[3].getBands();
+
+    expect(band1_songs.length).toBe(3);
+    expect(song2_bands.length).toBe(2);
+  });
+
+  test("manager and band association", async () => {
+    const manager = await Manager.create({
+      name: "Alex",
+      email: "alex@gmail.com",
+      salary: 2000,
+      dateHired: Date.now(),
+    });
+    const band = await Band.findByPk(1);
+    await band.setManager(manager);
+    const bandWithManager = await Band.findByPk(1, {
+      include: Manager,
+    });
+
+    expect(bandWithManager.Manager.id).toBe(1);
+  });
+
+  test("eager loading", async () => {
+    const bandsWithMusicians = await Band.findAll({
+      include: [{ model: Musician, as: "Musicians" }],
+    });
+    const bandsWithSongs = await Band.findAll({
+      include: [{ model: Song, as: "Songs" }],
+    });
+
+    expect(bandsWithMusicians[0].Musicians.length).toBe(2);
+    expect(bandsWithSongs[0].Songs.length).toBe(3);
   });
 });
